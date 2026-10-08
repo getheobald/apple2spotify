@@ -125,14 +125,14 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
 <body>
 <main>
   <h1>Move a playlist from Apple Music to Spotify</h1>
-  <p class="lede">Export a playlist from the Music app, drop the file here, check the matches, and create the playlist in your Spotify account. Everything runs in this page; your file never leaves your browser except as song searches sent to Spotify.</p>
+  <p class="lede">Export a playlist from the Music app, drop the file here, check the matches, and create the playlist in your Spotify account.</p>
 
   <section class="step" id="step1">
     <div class="num">1</div>
     <div class="body">
       <h2>Connect Spotify</h2>
       <div id="connectForm">
-        <p class="hint">This uses your own Spotify developer app. The app owner needs Spotify Premium, and anyone else who uses it must be added to the app's user list.</p>
+        <p class="hint">Uses my Spotify developer app. App owner needs Spotify Premium, and anyone who uses it must be added to the app's user list.</p>
         <label class="field" for="clientId">Client ID</label>
         <div class="inline">
           <input type="text" id="clientId" autocomplete="off" spellcheck="false" placeholder="Paste from your Spotify developer dashboard">
@@ -225,7 +225,7 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
   const REDIRECT_URI = location.origin + location.pathname;
   const $ = id => document.getElementById(id);
 
-  // ---------- storage helpers ----------
+  // storage helpers
   const store = {
     get(k, s = localStorage) { try { return s.getItem(k); } catch { return null; } },
     set(k, v, s = localStorage) { try { s.setItem(k, v); } catch {} },
@@ -246,7 +246,7 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
   function enableStep(n, on) { $("step" + n).setAttribute("aria-disabled", on ? "false" : "true"); }
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-  // ---------- PKCE auth ----------
+  // PKCE auth
   const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   function randomString(len) {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
@@ -326,7 +326,7 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
     return data;
   }
 
-  // ---------- file parsing ----------
+  // file parsing
   function decode(buf) {
     const b = new Uint8Array(buf);
     if (b[0] === 0xFF && b[1] === 0xFE) return new TextDecoder("utf-16le").decode(b);
@@ -387,7 +387,7 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
     return { songs };
   }
 
-  // ---------- matching ----------
+  // matching
   const FEAT_PAREN = /\s*[\(\[](?:feat\.?|ft\.?|featuring|with)\s[^\)\]]*[\)\]]/gi;
   const FEAT_TAIL = /\s+(?:feat\.?|ft\.?|featuring)\s.*$/i;
   const MARKERS = {
@@ -449,7 +449,7 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
   });
 
   async function search(q) {
-    const d = await api("/search?" + new URLSearchParams({ q, type: "track", limit: "10", market: "from_token" }));
+    const d = await api("/search?" + new URLSearchParams({ q, type: "track", limit: "10" }));
     return (d.tracks && d.tracks.items) || [];
   }
 
@@ -468,7 +468,7 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
     return [...seen.values()].sort((a, b) => b.score - a.score).slice(0, 6);
   }
 
-  // ---------- state and rendering ----------
+  // state and rendering
   const THRESHOLD = 0.6, REVIEW_BELOW = 0.8;
   let songs = [], filter = "all";
 
@@ -567,7 +567,8 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
           if (s.candidates.length) { s.choice = 0; s.include = s.candidates[0].score >= THRESHOLD; }
         } catch (e) {
           failed++;
-          if (e.status === 403) { setStatus("status2", "Spotify refused the search. Check that your account is on the app's user list and the app owner has Premium.", "err"); next = songs.length; }
+          if (e.status === 403) { setStatus("status2", `Spotify refused the search (403: ${e.message}). If you've just changed the app's settings, disconnect and connect again.`, "err"); next = songs.length; }
+          else if (failed === 1) setStatus("status2", "A search failed: " + e.message, "err");
         }
         done++; tick();
       }
@@ -599,7 +600,7 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
       $("step3").classList.add("done"); $("step4").classList.add("done");
     } catch (e) {
       setStatus("status4", e.status === 403
-        ? "Spotify refused to create the playlist. Check that your account is on the app's user list and the app owner has Premium."
+        ? `Spotify refused to create the playlist (403: ${e.message}). Try disconnecting and connecting again.`
         : "Couldn't create the playlist: " + e.message, "err");
     } finally { btn.disabled = false; btn.textContent = "Create playlist on Spotify"; }
   }
@@ -613,7 +614,7 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
     document.body.append(a); a.click(); a.remove();
   }
 
-  // ---------- wiring ----------
+  // wiring
   async function showConnection() {
     if (!getToken()) {
       $("connectForm").hidden = false; $("connected").hidden = true; $("step1").classList.remove("done");

@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Playlist mover: Apple Music to Spotify</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#EDF0F4; --surface:#FFFFFF; --ink:#18202B; --muted:#5A6573; --line:#D3D9E1;
+  --accent:#7B2D6B; --accent-ink:#FFFFFF; --good:#2C7A6E; --warn:#A8641C; --bad:#B23A3A;
+  --radius-lg:14px; --radius-sm:6px;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#12161C; --surface:#1B2129; --ink:#E6EAF0; --muted:#9AA5B3; --line:#2C3440;
+    --accent:#D07DBE; --accent-ink:#1A0F17; --good:#5FBFAE; --warn:#E0A35A; --bad:#E07A7A;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#12161C; --surface:#1B2129; --ink:#E6EAF0; --muted:#9AA5B3; --line:#2C3440;
+  --accent:#D07DBE; --accent-ink:#1A0F17; --good:#5FBFAE; --warn:#E0A35A; --bad:#E07A7A;
+}
+*, *::before, *::after { box-sizing:inherit; }
+html { scroll-padding-top:env(safe-area-inset-top,0px); }
+body {
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size:16px; line-height:1.5;
+}
+main { max-width:880px; margin:0 auto; padding:48px 20px 80px; }
+h1 {
+  font-size:clamp(2rem, 5.5vw, 3.4rem); line-height:1.02; font-weight:800;
+  letter-spacing:-0.025em; margin:0 0 14px; max-width:16ch;
+}
+.lede { color:var(--muted); font-size:1.08rem; max-width:60ch; margin:0 0 40px; }
+.step {
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-lg);
+  padding:24px; margin-bottom:16px; display:grid; grid-template-columns:44px 1fr; gap:4px 16px;
+}
+.step[aria-disabled="true"] { opacity:.5; }
+.step[aria-disabled="true"] .body { pointer-events:none; }
+.num {
+  width:36px; height:36px; border-radius:50%; border:2px solid var(--ink);
+  display:grid; place-items:center; font-weight:800;
+}
+.step.done .num { background:var(--good); border-color:var(--good); color:var(--surface); }
+h2 { font-size:1.3rem; margin:4px 0 6px; font-weight:600; letter-spacing:-0.01em; }
+.body { grid-column:2; min-width:0; }
+p { margin:0 0 12px; max-width:68ch; }
+.hint { color:var(--muted); font-size:.92rem; }
+label.field { display:block; font-weight:600; font-size:.95rem; margin:14px 0 6px; }
+input[type=text], input[type=search], select {
+  font:inherit; color:var(--ink); background:var(--bg); border:1px solid var(--line);
+  border-radius:var(--radius-sm); padding:9px 11px; width:100%; max-width:100%;
+}
+.inline { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.inline input[type=text] { flex:1 1 260px; width:auto; }
+code.uri {
+  display:block; overflow-x:auto; white-space:nowrap; background:var(--bg); border:1px dashed var(--line);
+  padding:9px 11px; border-radius:var(--radius-sm); font-size:.9rem; flex:1 1 260px;
+}
+button {
+  font:inherit; font-weight:600; cursor:pointer; border-radius:999px; padding:9px 18px;
+  border:1px solid var(--ink); background:transparent; color:var(--ink);
+}
+button.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+button:disabled { opacity:.45; cursor:not-allowed; }
+button.small { padding:5px 12px; font-size:.88rem; }
+:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+.status { margin-top:12px; font-size:.95rem; }
+.status.err { color:var(--bad); }
+.status.ok { color:var(--good); }
+.drop {
+  border:2px dashed var(--line); border-radius:var(--radius-lg); padding:28px 20px; text-align:center;
+  cursor:pointer; transition:border-color .15s, background .15s;
+}
+.drop.over { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, transparent); }
+.drop strong { display:block; font-size:1.05rem; }
+details { margin-top:12px; }
+summary { cursor:pointer; font-weight:600; }
+details ol { padding-left:20px; margin:8px 0 0; }
+details li { margin-bottom:6px; }
+
+.progress { height:8px; background:var(--bg); border-radius:999px; overflow:hidden; margin:12px 0 6px; }
+.progress > span { display:block; height:100%; width:0; background:var(--accent); transition:width .2s; }
+.toolbar { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; margin:8px 0 12px; }
+.seg { display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:3px; }
+.seg button { border:none; padding:5px 14px; font-size:.9rem; }
+.seg button[aria-pressed="true"] { background:var(--ink); color:var(--surface); }
+
+ul.rows { list-style:none; margin:0; padding:0; border-top:1px solid var(--line); }
+li.row {
+  display:grid; grid-template-columns:28px minmax(0,1fr) minmax(0,1.3fr) 64px; gap:12px;
+  padding:12px 0; border-bottom:1px solid var(--line); align-items:center;
+}
+li.row.off .src, li.row.off .dst { opacity:.5; }
+.src b { display:block; font-weight:600; overflow-wrap:anywhere; }
+.src span { color:var(--muted); font-size:.9rem; overflow-wrap:anywhere; }
+.dst select { font-size:.92rem; padding:7px 9px; }
+.dst .none { color:var(--bad); font-size:.92rem; margin-bottom:6px; }
+.dst .inline input { flex:1 1 140px; padding:6px 9px; font-size:.9rem; }
+.conf { text-align:right; font-size:.85rem; font-variant-numeric:tabular-nums; color:var(--muted); }
+.bar { height:6px; background:var(--bg); border-radius:999px; overflow:hidden; margin-bottom:4px; }
+.bar > span { display:block; height:100%; }
+input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
+.result a { color:var(--accent); font-weight:600; }
+@media (max-width:640px) {
+  main { padding-top:28px; }
+  .step { grid-template-columns:1fr; padding:18px; }
+  .body { grid-column:1; }
+  li.row { grid-template-columns:28px minmax(0,1fr) 54px; }
+  .dst { grid-column:2 / 4; }
+  .conf { grid-row:1; grid-column:3; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Move a playlist from Apple Music to Spotify</h1>
+  <p class="lede">Export a playlist from the Music app, drop the file here, check the matches, and create the playlist in your Spotify account. Everything runs in this page; your file never leaves your browser except as song searches sent to Spotify.</p>
+
+  <section class="step" id="step1">
+    <div class="num">1</div>
+    <div class="body">
+      <h2>Connect Spotify</h2>
+      <div id="connectForm">
+        <p class="hint">This uses your own Spotify developer app. The app owner needs Spotify Premium, and anyone else who uses it must be added to the app's user list.</p>
+        <label class="field" for="clientId">Client ID</label>
+        <div class="inline">
+          <input type="text" id="clientId" autocomplete="off" spellcheck="false" placeholder="Paste from your Spotify developer dashboard">
+          <button class="primary" id="connectBtn">Connect Spotify</button>
+        </div>
+        <label class="field">Redirect URI to register in your app</label>
+        <div class="inline">
+          <code class="uri" id="redirectUri"></code>
+          <button class="small" id="copyUri">Copy</button>
+        </div>
+        <details>
+          <summary>How to set up the Spotify app</summary>
+          <ol>
+            <li>Go to developer.spotify.com/dashboard and choose Create app.</li>
+            <li>Under redirect URIs, add the address shown above, exactly as written.</li>
+            <li>Under APIs used, choose Web API, then save.</li>
+            <li>Open the app's settings and copy the Client ID into the box above. You don't need the client secret.</li>
+          </ol>
+        </details>
+      </div>
+      <div id="connected" hidden>
+        <p>Connected as <strong id="userName"></strong>.</p>
+        <button class="small" id="disconnectBtn">Disconnect</button>
+      </div>
+      <div class="status" id="status1" role="status"></div>
+    </div>
+  </section>
+
+  <section class="step" id="step2" aria-disabled="true">
+    <div class="num">2</div>
+    <div class="body">
+      <h2>Add your exported playlist</h2>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a playlist file">
+        <strong>Drop a playlist file here, or click to choose one</strong>
+        <span class="hint">Works with .txt or .xml exports from the Music app, or a CSV with Name and Artist columns</span>
+      </div>
+      <input type="file" id="fileInput" accept=".txt,.xml,.csv,.tsv" hidden>
+      <details>
+        <summary>How to export from Apple Music</summary>
+        <ol>
+          <li>In the Music app on a Mac (or iTunes on Windows), select the playlist in the sidebar.</li>
+          <li>Choose File, then Library, then Export Playlist.</li>
+          <li>Save it as Unicode Text or XML. Either works.</li>
+        </ol>
+      </details>
+      <div class="status" id="status2" role="status"></div>
+      <div id="progressWrap" hidden>
+        <div class="progress"><span id="progressBar"></span></div>
+        <div class="hint" id="progressText"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="step" id="step3" aria-disabled="true">
+    <div class="num">3</div>
+    <div class="body">
+      <h2>Check the matches</h2>
+      <p class="hint">Unchecked songs won't be added. Pick a different version from the menu, or search again for songs without a match.</p>
+      <div class="toolbar">
+        <span id="summary"></span>
+        <div class="seg" role="group" aria-label="Filter songs">
+          <button aria-pressed="true" data-filter="all">All</button>
+          <button aria-pressed="false" data-filter="review">Needs a look</button>
+        </div>
+      </div>
+      <ul class="rows" id="rows"></ul>
+    </div>
+  </section>
+
+  <section class="step" id="step4" aria-disabled="true">
+    <div class="num">4</div>
+    <div class="body">
+      <h2>Create the playlist</h2>
+      <label class="field" for="plName">Playlist name</label>
+      <input type="text" id="plName">
+      <p style="margin-top:12px"><label><input type="checkbox" id="plPublic"> Make it public</label></p>
+      <div class="inline">
+        <button class="primary" id="createBtn">Create playlist on Spotify</button>
+        <button id="csvBtn">Download skipped songs</button>
+      </div>
+      <div class="status result" id="status4" role="status"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const SCOPES = "playlist-modify-private playlist-modify-public";
+  const API = "https://api.spotify.com/v1";
+  const REDIRECT_URI = location.origin + location.pathname;
+  const $ = id => document.getElementById(id);
+
+  // ---------- storage helpers ----------
+  const store = {
+    get(k, s = localStorage) { try { return s.getItem(k); } catch { return null; } },
+    set(k, v, s = localStorage) { try { s.setItem(k, v); } catch {} },
+    del(k, s = localStorage) { try { s.removeItem(k); } catch {} },
+  };
+
+  function el(tag, attrs = {}, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") e.className = v;
+      else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+      else if (v !== false && v != null) e.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat()) if (kid != null) e.append(kid instanceof Node ? kid : String(kid));
+    return e;
+  }
+  function setStatus(id, msg, kind = "") { const s = $(id); s.textContent = msg; s.className = "status " + kind + (id === "status4" ? " result" : ""); }
+  function enableStep(n, on) { $("step" + n).setAttribute("aria-disabled", on ? "false" : "true"); }
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // ---------- PKCE auth ----------
+  const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  function randomString(len) {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+    return Array.from(crypto.getRandomValues(new Uint8Array(len)), x => chars[x % chars.length]).join("");
+  }
+
+  async function login() {
+    const clientId = $("clientId").value.trim();
+    if (!clientId) return setStatus("status1", "Paste your Client ID first.", "err");
+    if (!window.isSecureContext || !crypto.subtle) {
+      return setStatus("status1", "Login needs a secure address. Open this page at http://127.0.0.1 or over https.", "err");
+    }
+    store.set("pm_client_id", clientId);
+    const verifier = randomString(64), state = randomString(16);
+    store.set("pm_verifier", verifier, sessionStorage);
+    store.set("pm_state", state, sessionStorage);
+    const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+    location.href = "https://accounts.spotify.com/authorize?" + new URLSearchParams({
+      client_id: clientId, response_type: "code", redirect_uri: REDIRECT_URI,
+      code_challenge_method: "S256", code_challenge: challenge, scope: SCOPES, state,
+    });
+  }
+
+  async function tokenRequest(params) {
+    const r = await fetch("https://accounts.spotify.com/api/token", {
+      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(params),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error_description || data.error || "Token request failed");
+    const tok = {
+      access: data.access_token,
+      refresh: data.refresh_token || (getToken() || {}).refresh,
+      expires: Date.now() + (data.expires_in - 60) * 1000,
+    };
+    store.set("pm_token", JSON.stringify(tok), sessionStorage);
+    return tok;
+  }
+  function getToken() { try { return JSON.parse(store.get("pm_token", sessionStorage)); } catch { return null; } }
+
+  async function handleRedirect() {
+    const q = new URLSearchParams(location.search);
+    if (!q.has("code") && !q.has("error")) return;
+    history.replaceState(null, "", REDIRECT_URI);
+    if (q.get("error")) return setStatus("status1", "Spotify login was cancelled or refused: " + q.get("error"), "err");
+    if (q.get("state") !== store.get("pm_state", sessionStorage)) return setStatus("status1", "Login check failed. Try connecting again.", "err");
+    try {
+      await tokenRequest({
+        grant_type: "authorization_code", code: q.get("code"), redirect_uri: REDIRECT_URI,
+        client_id: store.get("pm_client_id"), code_verifier: store.get("pm_verifier", sessionStorage),
+      });
+    } catch (e) { setStatus("status1", "Couldn't finish login: " + e.message, "err"); }
+  }
+
+  async function accessToken() {
+    let tok = getToken();
+    if (!tok) throw new Error("Not connected to Spotify.");
+    if (Date.now() > tok.expires) {
+      if (!tok.refresh) throw new Error("Session expired. Connect again.");
+      tok = await tokenRequest({ grant_type: "refresh_token", refresh_token: tok.refresh, client_id: store.get("pm_client_id") });
+    }
+    return tok.access;
+  }
+
+  async function api(path, opts = {}, retried = false) {
+    const r = await fetch(API + path, {
+      ...opts,
+      headers: { Authorization: "Bearer " + await accessToken(), "Content-Type": "application/json", ...(opts.headers || {}) },
+    });
+    if (r.status === 429) { await sleep((Number(r.headers.get("Retry-After")) || 2) * 1000); return api(path, opts, retried); }
+    if (r.status === 401 && !retried) {
+      const t = getToken(); if (t) { t.expires = 0; store.set("pm_token", JSON.stringify(t), sessionStorage); }
+      return api(path, opts, true);
+    }
+    const data = r.status === 204 ? {} : await r.json().catch(() => ({}));
+    if (!r.ok) { const err = new Error((data.error && data.error.message) || ("HTTP " + r.status)); err.status = r.status; throw err; }
+    return data;
+  }
+
+  // ---------- file parsing ----------
+  function decode(buf) {
+    const b = new Uint8Array(buf);
+    if (b[0] === 0xFF && b[1] === 0xFE) return new TextDecoder("utf-16le").decode(b);
+    if (b[0] === 0xFE && b[1] === 0xFF) return new TextDecoder("utf-16be").decode(b);
+    let zeros = 0; for (let i = 1; i < Math.min(b.length, 400); i += 2) if (b[i] === 0) zeros++;
+    if (zeros > 50) return new TextDecoder("utf-16le").decode(b);
+    return new TextDecoder("utf-8").decode(b);
+  }
+
+  function plistValue(node) {
+    switch (node.tagName) {
+      case "dict": {
+        const out = {}, kids = [...node.children];
+        for (let i = 0; i < kids.length; i += 2) out[kids[i].textContent] = plistValue(kids[i + 1]);
+        return out;
+      }
+      case "array": return [...node.children].map(plistValue);
+      case "integer": case "real": return Number(node.textContent);
+      case "true": return true;
+      case "false": return false;
+      default: return node.textContent;
+    }
+  }
+  function parsePlist(text) {
+    const doc = new DOMParser().parseFromString(text, "application/xml");
+    const root = doc.querySelector("plist > dict");
+    if (!root) throw new Error("That XML file doesn't look like a Music app export.");
+    const lib = plistValue(root);
+    const tracks = lib.Tracks || {};
+    const pl = (lib.Playlists || []).slice(-1)[0];
+    const ids = pl && pl["Playlist Items"] ? pl["Playlist Items"].map(i => String(i["Track ID"])) : Object.keys(tracks);
+    const songs = ids.map(id => tracks[id]).filter(t => t && t.Name)
+      .map(t => ({ name: t.Name, artist: t.Artist || "", album: t.Album || "" }));
+    return { name: pl && pl.Name, songs };
+  }
+
+  function parseCSVLine(line, delim) {
+    if (delim === "\t") return line.split("\t");
+    const out = []; let cur = "", q = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (q) { if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
+      else if (c === '"') q = true; else if (c === delim) { out.push(cur); cur = ""; } else cur += c;
+    }
+    out.push(cur); return out;
+  }
+  function parseDelimited(text) {
+    const lines = text.split(/\r\n|\r|\n/).filter(l => l.trim());
+    if (!lines.length) return { songs: [] };
+    const delim = lines[0].includes("\t") ? "\t" : ",";
+    const head = parseCSVLine(lines[0], delim).map(h => h.trim().toLowerCase());
+    const col = names => head.findIndex(h => names.includes(h));
+    const iName = col(["name", "title", "track", "song"]), iArtist = col(["artist", "artists"]), iAlbum = col(["album"]);
+    if (iName < 0) throw new Error("Couldn't find a Name or Title column in that file.");
+    const songs = lines.slice(1).map(l => parseCSVLine(l, delim)).map(c => ({
+      name: (c[iName] || "").trim(), artist: iArtist >= 0 ? (c[iArtist] || "").trim() : "", album: iAlbum >= 0 ? (c[iAlbum] || "").trim() : "",
+    })).filter(s => s.name);
+    return { songs };
+  }
+
+  // ---------- matching ----------
+  const FEAT_PAREN = /\s*[\(\[](?:feat\.?|ft\.?|featuring|with)\s[^\)\]]*[\)\]]/gi;
+  const FEAT_TAIL = /\s+(?:feat\.?|ft\.?|featuring)\s.*$/i;
+  const MARKERS = {
+    live: [/\blive\b/i, 0.4], acoustic: [/\bacoustic\b/i, 0.4], remix: [/\bremix\b|\bmix\b/i, 0.4],
+    demo: [/\bdemo\b/i, 0.4], instrumental: [/\binstrumental\b/i, 0.4], unplugged: [/\bunplugged\b/i, 0.4],
+    extended: [/\bextended\b/i, 0.15], edit: [/\b(?:radio|single)\s+edit\b/i, 0.06],
+    remaster: [/\bremaster(?:ed)?\b/i, 0.04], mono: [/\bmono\b/i, 0.06],
+  };
+
+  function stripFeat(t) { return t.replace(FEAT_PAREN, "").replace(FEAT_TAIL, "").trim(); }
+  // Version info lives in (parens), [brackets], or after " - ".
+  function qualifiers(t) {
+    const parts = [...t.matchAll(/[\(\[]([^\)\]]*)[\)\]]/g)].map(m => m[1]);
+    const dash = t.match(/\s-\s(.+)$/); if (dash) parts.push(dash[1]);
+    return parts.join(" ");
+  }
+  function markersOf(t) {
+    const q = qualifiers(stripFeat(t)), out = new Set();
+    for (const [k, [re]] of Object.entries(MARKERS)) if (re.test(q)) out.add(k);
+    return out;
+  }
+  function baseTitle(t) {
+    return stripFeat(t)
+      .replace(/\s*[\(\[][^\)\]]*[\)\]]/g, m => markersOf(m).size ? "" : m)
+      .replace(/\s-\s.+$/, m => markersOf("(" + m.slice(3) + ")").size ? "" : m)
+      .trim();
+  }
+  function norm(s) {
+    return s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+      .replace(/&/g, " and ").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function sim(a, b) {
+    a = norm(a); b = norm(b);
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    const grams = s => { const m = new Map(); for (let i = 0; i < s.length - 1; i++) { const g = s.slice(i, i + 2); m.set(g, (m.get(g) || 0) + 1); } return m; };
+    const A = grams(a), B = grams(b); let hit = 0;
+    for (const [g, n] of A) hit += Math.min(n, B.get(g) || 0);
+    return (2 * hit) / (Math.max(a.length - 1, 1) + Math.max(b.length - 1, 1));
+  }
+  const primaryArtist = a => a.split(/,|&| feat\.? | ft\.? | x | and /i)[0].trim();
+
+  function scoreMatch(song, item) {
+    const title = sim(baseTitle(song.name), baseTitle(item.name));
+    const names = item.artists.map(a => a.name);
+    let artist = song.artist
+      ? Math.max(sim(primaryArtist(song.artist), names[0] || ""), sim(song.artist, names.join(", ")), ...names.map(n => sim(primaryArtist(song.artist), n)))
+      : 0.5;
+    const album = song.album ? sim(song.album, item.album.name) : 0;
+    const mA = markersOf(song.name), mB = markersOf(item.name);
+    let penalty = 0;
+    for (const [k, [, w]] of Object.entries(MARKERS)) if (mA.has(k) !== mB.has(k)) penalty += w;
+    return Math.max(0, Math.min(1, 0.55 * title + 0.4 * artist + 0.05 * album - penalty));
+  }
+
+  const toCandidate = (song, item) => ({
+    uri: item.uri, name: item.name, artists: item.artists.map(a => a.name).join(", "),
+    album: item.album.name, url: item.external_urls && item.external_urls.spotify, score: scoreMatch(song, item),
+  });
+
+  async function search(q) {
+    const d = await api("/search?" + new URLSearchParams({ q, type: "track", limit: "10", market: "from_token" }));
+    return (d.tracks && d.tracks.items) || [];
+  }
+
+  async function findCandidates(song) {
+    const base = baseTitle(song.name), artist = primaryArtist(song.artist);
+    const words = [...markersOf(song.name)].filter(m => MARKERS[m][1] >= 0.15).join(" ");
+    const queries = [];
+    if (words && artist) queries.push(`track:"${base}" artist:"${artist}" ${words}`);
+    if (artist) queries.push(`track:"${base}" artist:"${artist}"`);
+    queries.push(artist ? `${base} ${artist}` : base);
+    const seen = new Map();
+    for (const q of queries) {
+      for (const item of await search(q)) if (!seen.has(item.uri)) seen.set(item.uri, toCandidate(song, item));
+      if (Math.max(0, ...[...seen.values()].map(c => c.score)) >= 0.9) break;
+    }
+    return [...seen.values()].sort((a, b) => b.score - a.score).slice(0, 6);
+  }
+
+  // ---------- state and rendering ----------
+  const THRESHOLD = 0.6, REVIEW_BELOW = 0.8;
+  let songs = [], filter = "all";
+
+  const chosen = s => s.choice >= 0 ? s.candidates[s.choice] : null;
+  const needsLook = s => !chosen(s) || chosen(s).score < REVIEW_BELOW;
+  const color = sc => sc >= REVIEW_BELOW ? "var(--good)" : sc >= THRESHOLD ? "var(--warn)" : "var(--bad)";
+
+  function renderRow(s, i) {
+    const c = chosen(s);
+    const box = el("input", { type: "checkbox", "aria-label": "Include " + s.name });
+    box.checked = s.include; box.disabled = !c;
+    box.addEventListener("change", () => { s.include = box.checked; refresh(i); });
+
+    let dst;
+    if (s.candidates.length) {
+      const sel = el("select", { "aria-label": "Spotify match for " + s.name },
+        s.candidates.map((cand, j) => el("option", { value: j }, `${cand.name} by ${cand.artists} (${cand.album})`)));
+      sel.value = String(s.choice);
+      sel.addEventListener("change", () => { s.choice = Number(sel.value); s.include = true; refresh(i); });
+      dst = el("div", { class: "dst" }, sel, s.include ? null : searchBox(s, i));
+    } else {
+      dst = el("div", { class: "dst" }, el("div", { class: "none" }, "No match found"), searchBox(s, i));
+    }
+    const sc = c ? c.score : 0;
+    const bar = el("span", { style: `width:${Math.round(sc * 100)}%;background:${color(sc)}` });
+    return el("li", { class: "row" + (s.include ? "" : " off"), "data-i": i },
+      box,
+      el("div", { class: "src" }, el("b", {}, s.name), el("span", {}, [s.artist, s.album].filter(Boolean).join(", "))),
+      dst,
+      el("div", { class: "conf", title: "Match confidence" }, el("div", { class: "bar" }, bar), c ? Math.round(sc * 100) + "%" : "none"),
+    );
+  }
+
+  function searchBox(s, i) {
+    const input = el("input", { type: "search", value: `${baseTitle(s.name)} ${primaryArtist(s.artist)}`.trim(), "aria-label": "Search Spotify for " + s.name });
+    const btn = el("button", { class: "small" }, "Search");
+    const run = async () => {
+      btn.disabled = true; btn.textContent = "Searching";
+      try {
+        const found = (await search(input.value)).map(it => toCandidate(s, it));
+        const all = new Map([...s.candidates, ...found].map(c => [c.uri, c]));
+        s.candidates = [...all.values()].sort((a, b) => b.score - a.score).slice(0, 8);
+        if (found.length) { s.choice = s.candidates.findIndex(c => c.uri === found[0].uri); s.include = true; }
+        refresh(i);
+      } catch (e) { btn.textContent = "Try again"; btn.disabled = false; setStatus("status4", "Search failed: " + e.message, "err"); }
+    };
+    btn.addEventListener("click", run);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") run(); });
+    return el("div", { class: "inline" }, input, btn);
+  }
+
+  function renderAll() {
+    const ul = $("rows"); ul.replaceChildren();
+    songs.forEach((s, i) => { if (filter === "all" || needsLook(s)) ul.append(renderRow(s, i)); });
+    if (!ul.children.length) ul.append(el("li", { class: "row" }, el("span"), el("span", { class: "hint" }, "Every song has a confident match.")));
+    updateSummary();
+  }
+  function refresh(i) {
+    const old = $("rows").querySelector(`li[data-i="${i}"]`);
+    if (old) old.replaceWith(renderRow(songs[i], i));
+    updateSummary();
+  }
+  function updateSummary() {
+    const inc = songs.filter(s => s.include && chosen(s)).length, look = songs.filter(needsLook).length;
+    $("summary").textContent = `${inc} of ${songs.length} songs will be added. ${look} need a look.`;
+    $("createBtn").disabled = inc === 0;
+  }
+
+  async function loadFile(file) {
+    setStatus("status2", "");
+    let parsed;
+    try {
+      const text = decode(await file.arrayBuffer());
+      parsed = /^\s*(<\?xml|<!DOCTYPE plist|<plist)/i.test(text) ? parsePlist(text) : parseDelimited(text);
+    } catch (e) { return setStatus("status2", e.message, "err"); }
+    if (!parsed.songs.length) return setStatus("status2", "No songs found in that file. Check that it's a playlist export.", "err");
+
+    songs = parsed.songs.map(s => ({ ...s, candidates: [], choice: -1, include: false }));
+    $("plName").value = parsed.name || file.name.replace(/\.[^.]+$/, "");
+    $("drop").querySelector("strong").textContent = file.name;
+    enableStep(3, false); enableStep(4, false); setStatus("status4", "");
+
+    $("progressWrap").hidden = false;
+    let done = 0, failed = 0;
+    const tick = () => {
+      $("progressBar").style.width = (done / songs.length * 100) + "%";
+      $("progressText").textContent = `Matching ${done} of ${songs.length} songs`;
+    };
+    tick();
+    let next = 0;
+    const worker = async () => {
+      while (next < songs.length) {
+        const s = songs[next++];
+        try {
+          s.candidates = await findCandidates(s);
+          if (s.candidates.length) { s.choice = 0; s.include = s.candidates[0].score >= THRESHOLD; }
+        } catch (e) {
+          failed++;
+          if (e.status === 403) { setStatus("status2", "Spotify refused the search. Check that your account is on the app's user list and the app owner has Premium.", "err"); next = songs.length; }
+        }
+        done++; tick();
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    $("progressText").textContent = `Matched ${songs.filter(s => s.candidates.length).length} of ${songs.length} songs` + (failed ? `. ${failed} searches failed.` : ".");
+    $("step2").classList.add("done");
+    enableStep(3, true); enableStep(4, true);
+    renderAll();
+  }
+
+  async function createPlaylist() {
+    const uris = songs.filter(s => s.include && chosen(s)).map(s => chosen(s).uri);
+    const name = $("plName").value.trim() || "Imported from Apple Music";
+    const btn = $("createBtn"); btn.disabled = true; btn.textContent = "Creating";
+    setStatus("status4", "");
+    try {
+      const pl = await api("/me/playlists", {
+        method: "POST",
+        body: JSON.stringify({ name, public: $("plPublic").checked, description: "Imported from Apple Music" }),
+      });
+      for (let i = 0; i < uris.length; i += 100) {
+        await api(`/playlists/${pl.id}/items`, { method: "POST", body: JSON.stringify({ uris: uris.slice(i, i + 100) }) });
+      }
+      const s = $("status4"); s.className = "status ok result"; s.replaceChildren(
+        `Created "${name}" with ${uris.length} songs. `,
+        el("a", { href: pl.external_urls.spotify, target: "_blank", rel: "noopener" }, "Open in Spotify"),
+      );
+      $("step3").classList.add("done"); $("step4").classList.add("done");
+    } catch (e) {
+      setStatus("status4", e.status === 403
+        ? "Spotify refused to create the playlist. Check that your account is on the app's user list and the app owner has Premium."
+        : "Couldn't create the playlist: " + e.message, "err");
+    } finally { btn.disabled = false; btn.textContent = "Create playlist on Spotify"; }
+  }
+
+  function downloadSkipped() {
+    const skipped = songs.filter(s => !(s.include && chosen(s)));
+    if (!skipped.length) return setStatus("status4", "No songs are being skipped.", "ok");
+    const esc = v => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = ["Name,Artist,Album", ...skipped.map(s => [s.name, s.artist, s.album].map(esc).join(","))].join("\n");
+    const a = el("a", { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: ($("plName").value || "playlist") + " - skipped.csv" });
+    document.body.append(a); a.click(); a.remove();
+  }
+
+  // ---------- wiring ----------
+  async function showConnection() {
+    if (!getToken()) {
+      $("connectForm").hidden = false; $("connected").hidden = true; $("step1").classList.remove("done");
+      enableStep(2, false); return;
+    }
+    try {
+      const me = await api("/me");
+      $("userName").textContent = me.display_name || me.id;
+      $("connectForm").hidden = true; $("connected").hidden = false; $("step1").classList.add("done");
+      enableStep(2, true); setStatus("status1", "");
+    } catch (e) {
+      store.del("pm_token", sessionStorage);
+      $("connectForm").hidden = false; $("connected").hidden = true;
+      setStatus("status1", e.status === 403
+        ? "Spotify blocked this account. Add it to your app's user list in the developer dashboard, and make sure the app owner has Premium."
+        : "Couldn't reach Spotify: " + e.message, "err");
+    }
+  }
+
+  $("redirectUri").textContent = REDIRECT_URI;
+  $("clientId").value = store.get("pm_client_id") || "";
+  if (location.protocol === "file:") setStatus("status1", "This page has to be served from an address, not opened as a file. In this folder, run: python3 -m http.server 8888 --bind 127.0.0.1, then open http://127.0.0.1:8888", "err");
+  else if (location.hostname === "localhost") setStatus("status1", "Spotify doesn't accept localhost. Open this page at http://127.0.0.1" + (location.port ? ":" + location.port : "") + location.pathname + " instead.", "err");
+
+  $("connectBtn").addEventListener("click", login);
+  $("clientId").addEventListener("keydown", e => { if (e.key === "Enter") login(); });
+  $("copyUri").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(REDIRECT_URI); $("copyUri").textContent = "Copied"; } catch { $("copyUri").textContent = "Copy failed"; }
+    setTimeout(() => $("copyUri").textContent = "Copy", 1500);
+  });
+  $("disconnectBtn").addEventListener("click", () => { store.del("pm_token", sessionStorage); showConnection(); });
+
+  const drop = $("drop"), fileInput = $("fileInput");
+  drop.addEventListener("click", () => fileInput.click());
+  drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); } });
+  drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+  fileInput.addEventListener("change", () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); fileInput.value = ""; });
+
+  document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+    filter = b.dataset.filter;
+    document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    renderAll();
+  }));
+  $("createBtn").addEventListener("click", createPlaylist);
+  $("csvBtn").addEventListener("click", downloadSkipped);
+
+  handleRedirect().then(showConnection);
+})();
+</script>
+</body>
+</html>

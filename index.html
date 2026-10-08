@@ -582,13 +582,13 @@ input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
 
   async function createPlaylist() {
     const uris = songs.filter(s => s.include && chosen(s)).map(s => chosen(s).uri);
-    const name = $("plName").value.trim() || "Imported from Apple Music";
+    const name = $("plName").value.trim() || "";
     const btn = $("createBtn"); btn.disabled = true; btn.textContent = "Creating";
     setStatus("status4", "");
     try {
       const pl = await api("/me/playlists", {
         method: "POST",
-        body: JSON.stringify({ name, public: $("plPublic").checked, description: "Imported from Apple Music" }),
+        body: JSON.stringify({ name, public: $("plPublic").checked, description: "" }),
       });
       for (let i = 0; i < uris.length; i += 100) {
         await api(`/playlists/${pl.id}/items`, { method: "POST", body: JSON.stringify({ uris: uris.slice(i, i + 100) }) });
